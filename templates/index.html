@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Tech Voice Recorder with Whisper</title>
+  <!-- Optional: Include a futuristic font from Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="container">
+    <h1>Tech Voice Recorder with Whisper</h1>
+    <div id="waveform-container">
+      <canvas id="waveform" width="600" height="200"></canvas>
+    </div>
+    <div class="controls">
+      <button id="recordButton">Record</button>
+      <button id="stopButton" disabled>Stop</button>
+      <button id="replayButton" disabled>Replay Audio</button>
+      <a id="downloadLink" href="#" download="recording.wav" style="display: none;">
+        <button id="downloadButton">Download Audio</button>
+      </a>
+      <a id="downloadTextLink" href="#" download="transcription.txt" style="display: none;">
+        <button id="downloadTextButton">Download Text</button>
+      </a>
+    </div>
+    <p id="status">Press Record to start</p>
+    <h2>Transcription:</h2>
+    <div id="transcription"></div>
+  </div>
+
+  <script>
+    // Check browser support for recording
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      alert("Your browser does not support audio recording.");
+    }
+
+    let audioContext;
+    let analyser;
+    let mediaRecorder;
+    let animationId;
+    let chunks = [];
+    let lastAudioBlob = null; // Stores the most recent recorded audio
+
+    const recordButton = document.getElementById('recordButton');
+    const stopButton = document.getElementById('stopButton');
+    const replayButton = document.getElementById('replayButton');
+    const downloadLink = document.getElementById('downloadLink');
+    const downloadTextLink = document.getElementById('downloadTextLink');
+    const statusDisplay = document.getElementById('status');
+    const transcriptionDisplay = document.getElementById('transcription');
+    const canvas = document.getElementById('waveform');
+    const canvasCtx = canvas.getContext('2d');
+
+    // Set up the media stream and recording components
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+      audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const source = audioContext.createMediaStreamSource(stream);
+      
+      // Set up analyser for waveform visualization
+      analyser = audioContext.createAnalyser();
+      analyser.fftSize = 2048;
+      source.connect(analyser);
+      
+      // Configure MediaRecorder for audio capture
+      mediaRecorder = new MediaRecorder(stream);
+      mediaRecorder.ondataavailable = event => {
+        if (event.data.size > 0) {
+          chunks.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        cancelAnimationFrame(animationId);
+        // Create blob from the recorded chunks
+        const blob = new Blob(chunks, { type: 'audio/wav; codecs=MS_PCM' });
+        lastAudioBlob = blob;  // Save blob for replay/download
+        chunks = [];  // Clear for the next recording
+
+        // Update download link for audio file
+        const blobUrl = URL.createObjectURL(blob);
+        downloadLink.href = blobUrl;
+        downloadLink.style.display = "inline-block";
+        replayButton.disabled = false;
+
+        // Send audio for transcription
+        sendAudio(blob);
+      };
+
+      // Function to draw the waveform in real time
+      function drawWaveform() {
+        animationId = requestAnimationFrame(drawWaveform);
+        const bufferLength = analyser.fftSize;
+        const dataArray = new Uint8Array(bufferLength);
+        analyser.getByteTimeDomainData(dataArray);
+
+        canvasCtx.fillStyle = '#0a0f2a'; // dark blue background
+        canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
+
+        canvasCtx.lineWidth = 2;
+        canvasCtx.strokeStyle = '#00aeff'; // tech blue waveform
+        canvasCtx.beginPath();
+
+        const sliceWidth = canvas.width / bufferLength;
+        let x = 0;
+        for (let i = 0; i < bufferLength; i++) {
+          const v = dataArray[i] / 128.0;
+          const y = v * canvas.height / 2;
+          if (i === 0) {
+            canvasCtx.moveTo(x, y);
+          } else {
+            canvasCtx.lineTo(x, y);
+          }
+          x += sliceWidth;
+        }
+        canvasCtx.lineTo(canvas.width, canvas.height / 2);
+        canvasCtx.stroke();
+      }
+
+      // Start recording when Record button is clicked
+      recordButton.addEventListener('click', () => {
+        // Clear previous recording and text download
+        lastAudioBlob = null;
+        downloadLink.style.display = "none";
+        downloadTextLink.style.display = "none";
+        replayButton.disabled = true;
+        transcriptionDisplay.innerText = "";
+        statusDisplay.innerText = "Recording...";
+
+        mediaRecorder.start();
+        recordButton.disabled = true;
+        stopButton.disabled = false;
+        drawWaveform();
+      });
+
+      // Stop recording when Stop button is clicked
+      stopButton.addEventListener('click', () => {
+        mediaRecorder.stop();
+        recordButton.disabled = false;
+        stopButton.disabled = true;
+        statusDisplay.innerText = "Processing transcription...";
+      });
+
+      // Replay audio on click of Replay button
+      replayButton.addEventListener('click', () => {
+        if (lastAudioBlob) {
+          const audioUrl = URL.createObjectURL(lastAudioBlob);
+          const audio = new Audio(audioUrl);
+          audio.play();
+        }
+      });
+    }).catch(err => {
+      console.error('Error:', err);
+      statusDisplay.innerText = "Error accessing microphone: " + err;
+    });
+
+    // Sends the recorded audio to the server for transcription.
+    function sendAudio(blob) {
+      const formData = new FormData();
+      formData.append('audio', blob, 'recording.wav');
+
+      fetch('/transcribe', {
+        method: 'POST',
+        body: formData
+      })
+      .then(response => response.json())
+      .then(data => {
+        transcriptionDisplay.innerText = data.transcription;
+        statusDisplay.innerText = "Transcription complete.";
+        // Create a blob for the transcription text so it can be downloaded
+        const textBlob = new Blob([data.transcription], { type: 'text/plain' });
+        const textUrl = URL.createObjectURL(textBlob);
+        downloadTextLink.href = textUrl;
+        downloadTextLink.style.display = "inline-block";
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        statusDisplay.innerText = "Error during transcription.";
+      });
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,66 @@
+/* Import the Orbitron font if available */
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
+
+body {
+  background: linear-gradient(135deg, #000000, #0d2a54);
+  color: #e0e0ff;
+  font-family: 'Orbitron', sans-serif;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+}
+
+.container {
+  text-align: center;
+  max-width: 800px;
+  margin: 20px;
+  padding: 30px;
+  border: 2px solid #00aeff;
+  border-radius: 8px;
+  background-color: rgba(10, 15, 42, 0.8);
+  box-shadow: 0 0 15px #00aeff;
+}
+
+h1, h2 {
+  color: #00aeff;
+  text-shadow: 0 0 10px #00aeff;
+  margin-bottom: 20px;
+}
+
+.controls {
+  margin: 20px 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
+button {
+  background-color: #001f3f;
+  color: #e0e0ff;
+  border: 1px solid #00aeff;
+  padding: 10px 20px;
+  font-size: 16px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: transform 0.2s, background-color 0.2s;
+}
+
+button:hover {
+  background-color: #003366;
+  transform: scale(1.05);
+}
+
+button:disabled {
+  background-color: #33485c;
+  cursor: not-allowed;
+}
+
+#waveform-container {
+  margin: 20px 0;
+  border: 1px solid #00aeff;
+  border-radius: 4px;
+}
